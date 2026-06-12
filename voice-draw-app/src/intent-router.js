@@ -1,7 +1,7 @@
 // VoiceDraw Agent — Intent Router 四级分流 + 连续指令切分
 import { preprocess, matchL1, matchL2, matchL8 } from './rule-engine.js'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE || ''
 
 function matchL3(text) {
   const map = {
