@@ -14,6 +14,8 @@ if ENV_FILE.exists():
 
 DEEPSEEK_API_KEY = os.getenv("QINIU_DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.getenv("QINIU_DEEPSEEK_BASE_URL", "https://api.qiniu.com/v1")
+QINIU_ASR_ACCESS_KEY = os.getenv("QINIU_ASR_ACCESS_KEY", "")
+QINIU_ASR_SECRET_KEY = os.getenv("QINIU_ASR_SECRET_KEY", "")
 FASTAPI_HOST = os.getenv("FASTAPI_HOST", "0.0.0.0")
 FASTAPI_PORT = int(os.getenv("FASTAPI_PORT", "8000"))
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5273").split(",")
