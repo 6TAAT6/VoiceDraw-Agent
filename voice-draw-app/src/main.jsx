@@ -9,6 +9,70 @@ import { route, splitCommands } from './intent-router.js'
 let idCounter = 0
 function uid() { return `vd_${Date.now()}_${idCounter++}` }
 
+// ====== Canvas Memory (Day1 minimal) ======
+const canvasMemory = new Map()
+
+// ====== Task → Shape 映射 ======
+const TYPE_MAP = {
+  sidebar:       { w: 200, h: 400, label: '侧边栏' },
+  navbar:        { w: 600, h: 48,  label: '导航栏' },
+  'card-grid':   { w: 400, h: 280, label: '卡片区' },
+  card:          { w: 160, h: 100, label: '卡片' },
+  button:        { w: 100, h: 36,  label: '按钮' },
+  input:         { w: 200, h: 32,  label: '输入框' },
+  table:         { w: 400, h: 200, label: '表格' },
+  'chart-area':  { w: 300, h: 200, label: '图表区' },
+  'hero-section':{ w: 500, h: 200, label: '主区域' },
+  footer:        { w: 600, h: 40,  label: '页脚' },
+  'search-bar':  { w: 240, h: 32,  label: '搜索' },
+  form:          { w: 300, h: 240, label: '表单' },
+  text:          { w: 120, h: 32,  label: '文本' },
+}
+
+function executePlan(editor, plan) {
+  const tasks = plan.tasks || []
+  if (!tasks.length) return 0
+
+  const vp = editor.getViewportPageBounds()
+  const startX = vp.x + 40
+  let currentY = vp.y + 40
+  let drawn = 0
+
+  for (const task of tasks) {
+    if (task.action !== 'create') continue
+
+    const def = TYPE_MAP[task.type]
+    if (!def) {
+      editor.createShape({
+        id: uid(), type: 'text', x: startX, y: currentY,
+        props: { richText: [{ type: 'paragraph', content: [{ type: 'text', text: task.type || '?' }] }] },
+      })
+      currentY += 48
+      drawn++
+      continue
+    }
+
+    const id = uid()
+    editor.createShape({
+      id, type: 'geo', x: startX, y: currentY,
+      props: { geo: 'rectangle', w: def.w, h: def.h, color: 'light-violet' },
+    })
+
+    if (def.label) {
+      editor.createShape({
+        id: uid(), type: 'text', x: startX + 8, y: currentY + 4,
+        props: { richText: [{ type: 'paragraph', content: [{ type: 'text', text: def.label }] }] },
+      })
+    }
+
+    if (task.alias) canvasMemory.set(task.alias, { shape_id: id, type: task.type })
+    currentY += def.h + 16
+    drawn++
+  }
+
+  return drawn
+}
+
 function setStatus(state) {
   const text = document.getElementById('status-text')
   const dot = document.getElementById('status-dot')
@@ -80,7 +144,13 @@ function VoiceDrawInner() {
         case 'group': editor.groupShapes([...editor.getSelectedShapeIds()]); break
         case 'ungroup': editor.ungroupShapes([...editor.getSelectedShapeIds()]); break
         case 'selectAll': editor.selectAll(); break
-        case 'template': case 'plan': speak('收到，正在绘制').catch(() => {}); break
+        case 'template': speak('收到，正在绘制').catch(() => {}); break
+        case 'plan':
+          speak('收到，正在绘制').catch(() => {})
+          const count = executePlan(editor, args || {})
+          if (count) speak(`已绘制${count}个组件`).catch(() => {})
+          else speak('未能解析绘图指令').catch(() => {})
+          break
       }
       if (cmd === 'create') speak('画好了').catch(() => {})
     } catch (err) {
