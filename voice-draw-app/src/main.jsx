@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Tldraw, useEditor, createShapeId } from 'tldraw'
+import { Tldraw, useEditor, createShapeId, serializeTldrawJson, parseTldrawJsonFile } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { startListening, stopListening, checkSupport as checkSTT } from './speech.js'
 import { speak, checkSupport as checkTTS } from './tts.js'
@@ -101,24 +101,30 @@ function VoiceDrawInner() {
 
   useEffect(() => {
     // 启动时恢复最近快照
-    fetch('/api/snapshot/latest').then(r => r.json()).then(d => {
-      if (d?.data) {
+    fetch('/api/snapshot/latest').then(r => r.json()).then(async d => {
+      if (d?.data && typeof d.data === 'string') {
         try {
-          editor.loadSnapshot({ store: d.data })
+          const result = parseTldrawJsonFile({ schema: editor.store.schema, jsonStr: d.data })
+          if (!result.error) {
+            editor.loadSnapshot(result.value.getStoreSnapshot())
+            editor.clearHistory()
+          }
         } catch (_) {}
       }
       if (d?.alias) restore(d.alias)
     }).catch(() => {})
     // 每 30 秒自动保存
-    const timer = setInterval(() => {
-      const doc = editor.store.serialize()
-      const aliasData = snapshot()
-      if (!doc) return
-      fetch('/api/snapshot/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ alias: Object.fromEntries(aliasData), data: doc }),
-      }).catch(() => {})
+    const timer = setInterval(async () => {
+      try {
+        const json = await serializeTldrawJson(editor)
+        const aliasData = snapshot()
+        if (!json) return
+        fetch('/api/snapshot/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ alias: Object.fromEntries(aliasData), data: json }),
+        }).catch(() => {})
+      } catch (_) {}
     }, 30000)
     return () => clearInterval(timer)
   }, [])
@@ -180,13 +186,14 @@ function VoiceDrawInner() {
         case 'undo': editor.undo(); break
         case 'save':
           speak('正在保存').catch(() => {})
-          const sdoc = editor.store.serialize()
-          const sAliasData = Object.fromEntries(snapshot())
-          fetch('/api/snapshot/save', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ alias: sAliasData, data: sdoc }),
-          }).then(r => r.json()).then(j => {
-            if (j.ok) speak('已保存').catch(() => {})
+          serializeTldrawJson(editor).then(json => {
+            const sAliasData = Object.fromEntries(snapshot())
+            return fetch('/api/snapshot/save', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ alias: sAliasData, data: json }),
+            }).then(r => r.json())
+          }).then(j => {
+            if (j?.ok) speak('已保存').catch(() => {})
             else speak('保存失败').catch(() => {})
           }).catch(() => speak('保存失败').catch(() => {}))
           break
