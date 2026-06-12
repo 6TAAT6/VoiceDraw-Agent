@@ -6,6 +6,7 @@ import { startListening, stopListening, checkSupport as checkSTT } from './speec
 import { speak, checkSupport as checkTTS } from './tts.js'
 import { route, splitCommands } from './intent-router.js'
 import { loadScene } from './templates.js'
+import { layout } from './layout-engine.js'
 
 let idCounter = 0
 function uid() { return `vd_${Date.now()}_${idCounter++}` }
@@ -30,43 +31,43 @@ const TYPE_MAP = {
 }
 
 function executePlan(editor, plan) {
-  const tasks = plan.tasks || []
+  const tasks = (plan.tasks || []).filter(t => t.action === 'create')
   if (!tasks.length) return 0
 
   const vp = editor.getViewportPageBounds()
-  const startX = vp.x + 40
-  let currentY = vp.y + 40
+  const hint = plan.layout_hint || 'centered'
+
+  const positioned = layout(hint, tasks, { w: vp.w, h: vp.h })
   let drawn = 0
 
-  for (const task of tasks) {
-    if (task.action !== 'create') continue
+  for (const p of positioned) {
+    const def = TYPE_MAP[p.type]
+    const x = vp.x + p.x
+    const y = vp.y + p.y
 
-    const def = TYPE_MAP[task.type]
     if (!def) {
       editor.createShape({
-        id: uid(), type: 'text', x: startX, y: currentY,
-        props: { richText: [{ type: 'paragraph', content: [{ type: 'text', text: task.type || '?' }] }] },
+        id: uid(), type: 'text', x, y,
+        props: { richText: [{ type: 'paragraph', content: [{ type: 'text', text: p.type || '?' }] }] },
       })
-      currentY += 48
       drawn++
       continue
     }
 
     const id = uid()
     editor.createShape({
-      id, type: 'geo', x: startX, y: currentY,
-      props: { geo: 'rectangle', w: def.w, h: def.h, color: 'light-violet' },
+      id, type: 'geo', x, y,
+      props: { geo: 'rectangle', w: p.w, h: p.h, color: 'light-violet' },
     })
 
     if (def.label) {
       editor.createShape({
-        id: uid(), type: 'text', x: startX + 8, y: currentY + 4,
+        id: uid(), type: 'text', x: x + 8, y: y + 4,
         props: { richText: [{ type: 'paragraph', content: [{ type: 'text', text: def.label }] }] },
       })
     }
 
-    if (task.alias) setAlias(task.alias, id, task.type)
-    currentY += def.h + 16
+    if (p.alias) setAlias(p.alias, id, p.type)
     drawn++
   }
 
