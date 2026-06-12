@@ -79,3 +79,7 @@ html, body, #app {
   background: #f44336;
   animation: pulse 0.8s infinite;
 }
+
+#text-input-bar { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:999; }
+#text-input { width:400px; padding:8px 16px; border:1px solid #555; border-radius:20px; background:rgba(30,30,30,0.9); color:#eee; font-size:14px; outline:none; }
+#text-input:focus { border-color:#7289da; }
