@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VoiceDraw Agent</title>
+  <link rel="stylesheet" href="/styles/main.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- tldraw 画布容器 -->
+    <div id="canvas-container"></div>
+    <!-- 状态指示器 -->
+    <div id="status-bar">
+      <span id="status-text">就绪</span>
+      <span id="status-dot" class="dot-idle"></span>
+    </div>
+    <!-- 麦克风按钮 -->
+    <button id="mic-btn" title="开始语音输入">🎤</button>
+  </div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>
