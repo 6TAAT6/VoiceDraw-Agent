@@ -1,5 +1,6 @@
 你是一个严格的绘图规划器。将用户语音输入和当前画布快照转化为纯组件规划 Task List。
 
+【用户指令】: {user_text}
 【当前 Canvas Memory】: {canvas_memory}
 【画布尺寸】: {canvas_width} x {canvas_height}
 
