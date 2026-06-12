@@ -102,9 +102,12 @@ function VoiceDrawInner() {
   useEffect(() => {
     // 启动时恢复最近快照
     fetch('/api/snapshot/latest').then(r => r.json()).then(async d => {
-      if (d?.data) {
+      const payload = d?.data
+      if (!payload) return
+      const tldrawData = payload.data
+      if (tldrawData) {
         try {
-          const jsonStr = typeof d.data === 'string' ? d.data : JSON.stringify(d.data)
+          const jsonStr = typeof tldrawData === 'string' ? tldrawData : JSON.stringify(tldrawData)
           const result = parseTldrawJsonFile({ schema: editor.store.schema, jsonStr })
           if (!result.error) {
             editor.loadSnapshot(result.value.getStoreSnapshot())
@@ -112,7 +115,7 @@ function VoiceDrawInner() {
           }
         } catch (e) { console.warn('Snapshot restore failed:', e) }
       }
-      if (d?.alias) restore(d.alias)
+      if (payload.alias) restore(payload.alias)
     }).catch(() => {})
     // 每 30 秒自动保存
     const timer = setInterval(async () => {
