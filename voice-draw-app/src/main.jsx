@@ -7,6 +7,7 @@ import { speak, checkSupport as checkTTS } from './tts.js'
 import { route, splitCommands } from './intent-router.js'
 import { loadScene } from './templates.js'
 import { layout } from './layout-engine.js'
+import { toListening, toThinking, toDrawing, toSpeaking, toIdle, confirm as smConfirm, hasPendingConfirm, onChange } from './state-machine.js'
 
 let idCounter = 0
 function uid() { return `vd_${Date.now()}_${idCounter++}` }
@@ -74,7 +75,7 @@ function executePlan(editor, plan) {
   return drawn
 }
 
-function setStatus(state) {
+function updateStatusUI(state, payload) {
   const text = document.getElementById('status-text')
   const dot = document.getElementById('status-dot')
   if (!text || !dot) return
@@ -82,6 +83,8 @@ function setStatus(state) {
     idle: { text: '就绪', dotClass: 'dot-idle' },
     listening: { text: '正在听...', dotClass: 'dot-listening' },
     thinking: { text: '思考中...', dotClass: 'dot-thinking' },
+    confirming: { text: payload?.message || '确认操作？', dotClass: 'dot-thinking' },
+    clarifying: { text: payload?.options?.join(' / ') || '请选择', dotClass: 'dot-thinking' },
     drawing: { text: '绘制中...', dotClass: 'dot-thinking' },
     speaking: { text: '播报中...', dotClass: 'dot-speaking' },
     error: { text: '出错了', dotClass: 'dot-error' },
@@ -94,11 +97,14 @@ function VoiceDrawInner() {
   const editor = useEditor()
   const isListening = useRef(false)
 
-  useEffect(() => { window.__editor = editor }, [editor])
+  useEffect(() => {
+    window.__editor = editor
+    return onChange(updateStatusUI)
+  }, [editor])
 
   const executeCommand = useCallback(async (result) => {
     if (!result || result.cmd === 'noop' || result.cmd === 'unknown') return
-    setStatus('drawing')
+    toDrawing()
     const { cmd, args } = result
     try {
       const selected = editor.getSelectedShapes()
@@ -142,7 +148,14 @@ function VoiceDrawInner() {
         }
         case 'undo': editor.undo(); break
         case 'redo': editor.redo(); break
-        case 'clear': editor.deleteShapes([...editor.getCurrentPageShapeIds()]); break
+        case 'clear':
+          const ids = [...editor.getCurrentPageShapeIds()]
+          if (!ids.length) break
+          smConfirm('确认清空画布上全部图形？', () => {
+            editor.deleteShapes(ids)
+            speak('已清空').catch(() => {})
+          })
+          break
         case 'delete': editor.deleteShapes([...editor.getSelectedShapeIds()]); break
         case 'group': editor.groupShapes([...editor.getSelectedShapeIds()]); break
         case 'ungroup': editor.ungroupShapes([...editor.getSelectedShapeIds()]); break
@@ -162,25 +175,25 @@ function VoiceDrawInner() {
       if (cmd === 'create') speak('画好了').catch(() => {})
     } catch (err) {
       console.error(err)
-      setStatus('error'); setTimeout(() => setStatus('idle'), 2000)
-    } finally { setStatus('idle') }
+      updateStatusUI('error'); setTimeout(() => toIdle(), 2000)
+    } finally { if (!hasPendingConfirm()) toIdle() }
   }, [editor])
 
   const handleSpeech = useCallback(async () => {
     if (isListening.current) {
       stopListening(); isListening.current = false
-      document.getElementById('mic-btn')?.classList.remove('listening'); setStatus('idle'); return
+      document.getElementById('mic-btn')?.classList.remove('listening'); toIdle(); return
     }
     isListening.current = true
-    document.getElementById('mic-btn')?.classList.add('listening'); setStatus('listening')
+    document.getElementById('mic-btn')?.classList.add('listening'); toListening()
     startListening({
       onInterim: (t) => { const el = document.getElementById('status-text'); if (el) el.textContent = t || '正在听...' },
       onResult: async (text) => {
-        setStatus('thinking'); stopListening(); isListening.current = false
+        toThinking(); stopListening(); isListening.current = false
         document.getElementById('mic-btn')?.classList.remove('listening')
         for (const c of splitCommands(text)) await executeCommand(await route(c))
       },
-      onError: () => { setStatus('error'); isListening.current = false; document.getElementById('mic-btn')?.classList.remove('listening'); setTimeout(() => setStatus('idle'), 2000) },
+      onError: () => { updateStatusUI('error'); isListening.current = false; document.getElementById('mic-btn')?.classList.remove('listening'); setTimeout(() => toIdle(), 2000) },
     })
   }, [executeCommand])
 
@@ -192,7 +205,7 @@ function VoiceDrawInner() {
     return () => { btn.removeEventListener('click', handleSpeech); document.removeEventListener('keydown', onKey) }
   }, [handleSpeech])
 
-  useEffect(() => { console.log('[VoiceDraw] STT:', checkSTT(), 'TTS:', checkTTS()); setStatus('idle') }, [])
+  useEffect(() => { console.log('[VoiceDraw] STT:', checkSTT(), 'TTS:', checkTTS()); toIdle() }, [])
   return null
 }
 
