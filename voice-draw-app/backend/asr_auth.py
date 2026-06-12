@@ -1,26 +1,55 @@
-"""VoiceDraw Agent — 七牛云 ASR Token 生成"""
-import hmac
-import hashlib
-import base64
-from config import QINIU_ASR_ACCESS_KEY, QINIU_ASR_SECRET_KEY
+"""VoiceDraw Agent — 七牛云 ASR (HTTP 提交/查询模式)"""
+import httpx
+from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL
 
-ASR_WS_URL = "wss://rtasr.qiniuapi.com/v1/realtime/asr"
+# ASR 跟 DeepSeek 共用 base URL 和 API Key
+ASR_SUBMIT_URL = f"{DEEPSEEK_BASE_URL}/voice/asr/submit"
+ASR_QUERY_URL = f"{DEEPSEEK_BASE_URL}/voice/asr/query"
 
 
-def generate_asr_token() -> dict | None:
-    """生成七牛云 ASR WebSocket 访问 token"""
-    if not QINIU_ASR_ACCESS_KEY or not QINIU_ASR_SECRET_KEY:
+async def submit_asr(audio_url: str, audio_format: str = "wav") -> dict | None:
+    """提交音频 URL 进行识别，返回 {reqid, ...}"""
+    if not DEEPSEEK_API_KEY:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+            resp = await client.post(
+                ASR_SUBMIT_URL,
+                headers={
+                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "asr",
+                    "audio": {
+                        "format": audio_format,
+                        "url": audio_url,
+                    },
+                },
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as e:
+        print(f"[ASR] submit 失败: {e}")
         return None
 
-    host = "rtasr.qiniuapi.com"
-    path = "/v1/realtime/asr"
-    signing_str = f"GET {path}\nHost: {host}\n\n"
-    sign = hmac.new(
-        QINIU_ASR_SECRET_KEY.encode("utf-8"),
-        signing_str.encode("utf-8"),
-        hashlib.sha1,
-    ).digest()
-    encoded_sign = base64.urlsafe_b64encode(sign).decode("utf-8").rstrip("=")
-    access_token = f"{QINIU_ASR_ACCESS_KEY}:{encoded_sign}"
 
-    return {"url": ASR_WS_URL, "token": access_token}
+async def query_asr(reqid: str) -> dict | None:
+    """根据 reqid 查询识别结果"""
+    if not DEEPSEEK_API_KEY:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+            resp = await client.post(
+                ASR_QUERY_URL,
+                headers={
+                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={"reqid": reqid},
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as e:
+        print(f"[ASR] query 失败: {e}")
+        return None
