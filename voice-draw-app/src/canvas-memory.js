@@ -36,8 +36,10 @@ export function snapshot() {
 
 export function restore(data) {
   store.clear()
-  if (!Array.isArray(data)) return
-  for (const [alias, entry] of data) {
+  if (!data) return
+  // 兼容两种格式：Object（来自 JSON 反序列化）和 Array（来自 snapshot()）
+  const entries = Array.isArray(data) ? data : Object.entries(data)
+  for (const [alias, entry] of entries) {
     if (alias && entry?.shapeId) store.set(alias, entry)
   }
 }

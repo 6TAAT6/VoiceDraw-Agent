@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Tldraw, useEditor, createShapeId } from 'tldraw'
+import { Tldraw, useEditor, createShapeId, serializeTldrawJson, parseTldrawJsonFile } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { startListening, stopListening, checkSupport as checkSTT } from './speech.js'
 import { speak, checkSupport as checkTTS } from './tts.js'
@@ -9,7 +9,7 @@ import { loadScene } from './templates.js'
 import { layout } from './layout-engine.js'
 import { toListening, toThinking, toDrawing, toSpeaking, toIdle, confirm as smConfirm, hasPendingConfirm, onChange } from './state-machine.js'
 
-import { set as setAlias } from './canvas-memory.js'
+import { set as setAlias, snapshot, restore } from './canvas-memory.js'
 
 // ====== Task → Shape 映射 ======
 const TYPE_MAP = {
@@ -93,11 +93,67 @@ function updateStatusUI(state, payload) {
 function VoiceDrawInner() {
   const editor = useEditor()
   const isListening = useRef(false)
+  // 缓存最近一次快照数据，供 beforeunload 同步发送
+  const lastSaveRef = useRef(null)
 
   useEffect(() => {
     window.__editor = editor
     return onChange(updateStatusUI)
   }, [editor])
+
+  const doSave = useCallback(async (editorInstance) => {
+    try {
+      const json = await serializeTldrawJson(editorInstance)
+      const aliasData = snapshot()
+      if (!json) return false
+      const payload = { alias: Object.fromEntries(aliasData), data: json }
+      lastSaveRef.current = payload
+      const r = await fetch('/api/snapshot/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const j = await r.json()
+      return j?.ok === true
+    } catch (_) { return false }
+  }, [])
+
+  useEffect(() => {
+    // 启动时恢复最近快照（仅执行一次）
+    fetch('/api/snapshot/latest').then(r => r.json()).then(async d => {
+      const payload = d?.data
+      if (!payload) return
+      const tldrawData = payload.data
+      if (tldrawData) {
+        try {
+          const jsonStr = typeof tldrawData === 'string' ? tldrawData : JSON.stringify(tldrawData)
+          const result = parseTldrawJsonFile({ schema: editor.store.schema, json: jsonStr })
+          if (result.ok) {
+            editor.loadSnapshot(result.value.getStoreSnapshot())
+            editor.clearHistory()
+          }
+        } catch (e) { console.warn('Snapshot restore failed:', e) }
+      }
+      if (payload.alias) restore(payload.alias)
+    }).catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    // 每 30 秒自动保存
+    const timer = setInterval(() => { doSave(editor) }, 30000)
+    // 关闭/刷新前用 sendBeacon 同步保存
+    const onBeforeUnload = () => {
+      const payload = lastSaveRef.current
+      if (!payload) return
+      const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' })
+      navigator.sendBeacon('/api/snapshot/save', blob)
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('beforeunload', onBeforeUnload)
+    }
+  }, [editor, doSave])
 
   const executeCommand = useCallback(async (result) => {
     if (!result || result.cmd === 'noop' || result.cmd === 'unknown') return
@@ -154,6 +210,13 @@ function VoiceDrawInner() {
           break
         }
         case 'undo': editor.undo(); break
+        case 'save':
+          speak('正在保存').catch(() => {})
+          doSave(editor).then(ok => {
+            if (ok) speak('已保存').catch(() => {})
+            else speak('保存失败').catch(() => {})
+          })
+          break
         case 'redo': editor.redo(); break
         case 'clear':
           const ids = [...editor.getCurrentPageShapeIds()]
