@@ -9,8 +9,7 @@ import { route, splitCommands } from './intent-router.js'
 let idCounter = 0
 function uid() { return `vd_${Date.now()}_${idCounter++}` }
 
-// ====== Canvas Memory (Day1 minimal) ======
-const canvasMemory = new Map()
+import { set as setAlias } from './canvas-memory.js'
 
 // ====== Task → Shape 映射 ======
 const TYPE_MAP = {
@@ -65,7 +64,7 @@ function executePlan(editor, plan) {
       })
     }
 
-    if (task.alias) canvasMemory.set(task.alias, { shape_id: id, type: task.type })
+    if (task.alias) setAlias(task.alias, id, task.type)
     currentY += def.h + 16
     drawn++
   }
