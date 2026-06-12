@@ -1,0 +1,11 @@
+{
+  "scene_name": "思维导图",
+  "layout_hint": "centered",
+  "tasks": [
+    { "action": "create", "type": "card", "alias": "中心主题" },
+    { "action": "create", "type": "card", "alias": "分支一" },
+    { "action": "create", "type": "card", "alias": "分支二" },
+    { "action": "create", "type": "card", "alias": "分支三" },
+    { "action": "create", "type": "card", "alias": "分支四" }
+  ]
+}

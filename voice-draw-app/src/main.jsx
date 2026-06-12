@@ -5,6 +5,7 @@ import 'tldraw/tldraw.css'
 import { startListening, stopListening, checkSupport as checkSTT } from './speech.js'
 import { speak, checkSupport as checkTTS } from './tts.js'
 import { route, splitCommands } from './intent-router.js'
+import { loadScene } from './templates.js'
 
 let idCounter = 0
 function uid() { return `vd_${Date.now()}_${idCounter++}` }
@@ -142,7 +143,11 @@ function VoiceDrawInner() {
         case 'group': editor.groupShapes([...editor.getSelectedShapeIds()]); break
         case 'ungroup': editor.ungroupShapes([...editor.getSelectedShapeIds()]); break
         case 'selectAll': editor.selectAll(); break
-        case 'template': speak('收到，正在绘制').catch(() => {}); break
+        case 'template':
+          speak('收到，正在绘制').catch(() => {})
+          const tmpl = loadScene(args)
+          if (tmpl) { const n = executePlan(editor, tmpl); if (n) speak(`已绘制${n}个组件`).catch(() => {}) }
+          break
         case 'plan':
           speak('收到，正在绘制').catch(() => {})
           const count = executePlan(editor, args || {})

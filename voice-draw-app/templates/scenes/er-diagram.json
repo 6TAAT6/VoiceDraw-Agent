@@ -1,0 +1,10 @@
+{
+  "scene_name": "ER图",
+  "layout_hint": "grid",
+  "tasks": [
+    { "action": "create", "type": "card", "alias": "用户实体" },
+    { "action": "create", "type": "card", "alias": "订单实体" },
+    { "action": "create", "type": "card", "alias": "商品实体" },
+    { "action": "create", "type": "card", "alias": "分类实体" }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "scene_name": "流程图",
+  "layout_hint": "top-down",
+  "tasks": [
+    { "action": "create", "type": "card", "alias": "开始" },
+    { "action": "create", "type": "card", "alias": "步骤一" },
+    { "action": "create", "type": "card", "alias": "步骤二" },
+    { "action": "create", "type": "card", "alias": "判断条件" },
+    { "action": "create", "type": "card", "alias": "结束" }
+  ]
+}
