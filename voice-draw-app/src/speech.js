@@ -1,62 +1,6 @@
 // ============================================================
-// VoiceDraw Agent — 语音识别
-// 主力: 七牛云 ASR WebSocket  |  备用: Web Speech API
+// VoiceDraw Agent — 语音识别 (七牛云 ASR WebSocket)
 // ============================================================
-
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-
-// ====== Web Speech (fallback) ======
-
-let webSpeechReco = null
-
-function checkWebSpeech() {
-  return !!SpeechRecognition
-}
-
-function startWebSpeech({ onResult, onInterim, onError, onStart, onEnd }) {
-  if (!webSpeechReco) {
-    webSpeechReco = new SpeechRecognition()
-    webSpeechReco.lang = 'zh-CN'
-    webSpeechReco.interimResults = true
-    webSpeechReco.continuous = false
-    webSpeechReco.maxAlternatives = 1
-  }
-
-  webSpeechReco.onstart = () => onStart?.()
-  webSpeechReco.onresult = (event) => {
-    let interim = '', final = ''
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const t = event.results[i][0].transcript
-      if (event.results[i].isFinal) {
-        if (event.results[i][0].confidence < 0.6) {
-          onError?.(new Error('置信度过低'))
-          return
-        }
-        final += t
-      } else { interim += t }
-    }
-    if (final) onResult?.(final.trim())
-    if (interim) onInterim?.(interim.trim())
-  }
-  webSpeechReco.onerror = (event) => {
-    const msg = {
-      'no-speech': '未检测到语音',
-      'audio-capture': '麦克风未找到',
-      'not-allowed': '麦克风权限被拒绝',
-      'network': '网络错误',
-    }[event.error] || event.error
-    onError?.(new Error(msg))
-  }
-  webSpeechReco.onend = () => onEnd?.()
-
-  try { webSpeechReco.start() } catch (err) { onError?.(err) }
-}
-
-function stopWebSpeech() {
-  if (webSpeechReco) { try { webSpeechReco.stop() } catch (_) {} }
-}
-
-// ====== 七牛云 ASR WebSocket (主力) ======
 
 let asrWs = null
 let audioCtx = null
@@ -65,12 +9,10 @@ let micStream = null
 let asrActive = false
 
 async function startQiniuASR({ onResult, onInterim, onError, onStart, onEnd }) {
-  // 1) 获取 token
   const tokenResp = await fetch('/api/asr/token')
   const tokenData = await tokenResp.json()
   if (!tokenData.available) throw new Error(tokenData.reason || 'ASR 不可用')
 
-  // 2) 建立 WebSocket
   const wsUrl = `${tokenData.url}?token=${encodeURIComponent(tokenData.token)}`
   asrWs = new WebSocket(wsUrl)
 
@@ -80,7 +22,6 @@ async function startQiniuASR({ onResult, onInterim, onError, onStart, onEnd }) {
     setTimeout(() => reject(new Error('ASR 连接超时')), 5000)
   })
 
-  // 3) 发送开始指令
   asrWs.send(JSON.stringify({
     cmd: 'start',
     params: { audio_format: 'pcm', sample_rate: 16000, channels: 1, bits_per_sample: 16 },
@@ -110,7 +51,6 @@ async function startQiniuASR({ onResult, onInterim, onError, onStart, onEnd }) {
     onEnd?.()
   }
 
-  // 4) 打开麦克风，PCM 流送
   micStream = await navigator.mediaDevices.getUserMedia({
     audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
   })
@@ -138,7 +78,6 @@ async function startQiniuASR({ onResult, onInterim, onError, onStart, onEnd }) {
   asrActive = true
   onStart?.()
 
-  // 5) 静音 3 秒自动停止
   let silenceTimer
   const resetSilence = () => {
     clearTimeout(silenceTimer)
@@ -163,39 +102,23 @@ function stopQiniuASR() {
   asrWs = null; audioCtx = null; scriptNode = null; micStream = null
 }
 
-// ====== 统一接口 ======
-
-let activeEngine = null
-
 export function checkSupport() {
-  return !!(navigator.mediaDevices?.getUserMedia) || checkWebSpeech()
+  return !!navigator.mediaDevices?.getUserMedia
 }
 
 export async function startListening(callbacks = {}) {
   try {
     await startQiniuASR(callbacks)
-    activeEngine = 'qiniu'
-    return
   } catch (err) {
-    console.warn('[Speech] 七牛 ASR 不可用，降级 Web Speech:', err.message)
-    stopQiniuASR()
+    console.warn('[Speech]', err.message)
+    callbacks.onError?.(err)
   }
-
-  if (checkWebSpeech()) {
-    startWebSpeech(callbacks)
-    activeEngine = 'webspeech'
-    return
-  }
-  callbacks.onError?.(new Error('语音识别不可用'))
 }
 
 export function stopListening() {
-  if (activeEngine === 'qiniu') stopQiniuASR()
-  else if (activeEngine === 'webspeech') stopWebSpeech()
-  activeEngine = null
+  stopQiniuASR()
 }
 
 export function destroy() {
   stopListening()
-  webSpeechReco = null
 }
