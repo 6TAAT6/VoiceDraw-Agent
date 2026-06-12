@@ -100,31 +100,30 @@ function VoiceDrawInner() {
     setStatus('drawing')
     const { cmd, args } = result
     try {
-      const shapes = editor.getSelectedShapes()
-      const page = editor.getCurrentPagePoint({ x: editor.getViewportScreenBounds().x + editor.getViewportScreenBounds().w / 2, y: editor.getViewportScreenBounds().y + editor.getViewportScreenBounds().h / 2 })
+      const selected = editor.getSelectedShapes()
+      const vp = editor.getViewportPageBounds()
+      const cx = vp.x + vp.w / 2
+      const cy = vp.y + vp.h / 2
 
       switch (cmd) {
         case 'create': {
           const geoMap = { circle: 'circle', rect: 'rectangle', triangle: 'triangle', diamond: 'diamond' }
           const geo = geoMap[args]
           if (geo) {
-            const p = editor.getCurrentPagePoint({ x: editor.getViewportScreenBounds().x + editor.getViewportScreenBounds().w / 2, y: editor.getViewportScreenBounds().y + editor.getViewportScreenBounds().h / 2 })
-            editor.createShapes([{ id: uid(), type: 'geo', x: p.x - 50, y: p.y - 50, props: { geo, w: 100, h: 100 } }])
+            editor.createShape({ id: uid(), type: 'geo', x: cx - 50, y: cy - 50, props: { geo, w: 100, h: 100 } })
           } else if (args && args.startsWith('label:')) {
-            const p = editor.getCurrentPagePoint({ x: editor.getViewportScreenBounds().x + editor.getViewportScreenBounds().w / 2, y: editor.getViewportScreenBounds().y + editor.getViewportScreenBounds().h / 2 })
-            editor.createShapes([{ id: uid(), type: 'text', x: p.x, y: p.y, props: { richText: [{ type: 'paragraph', content: [{ type: 'text', text: args.replace('label:', '') }] }] } }])
+            editor.createShape({ id: uid(), type: 'text', x: cx, y: cy, props: { richText: [{ type: 'paragraph', content: [{ type: 'text', text: args.replace('label:', '') }] }] } })
           } else {
-            const p = editor.getCurrentPagePoint({ x: editor.getViewportScreenBounds().x + editor.getViewportScreenBounds().w / 2, y: editor.getViewportScreenBounds().y + editor.getViewportScreenBounds().h / 2 })
-            editor.createShapes([{ id: uid(), type: args === 'arrow' ? 'arrow' : 'line', x: p.x - 50, y: p.y, props: args === 'arrow' ? {} : undefined }])
+            editor.createShape({ id: uid(), type: args === 'arrow' ? 'arrow' : 'line', x: cx - 50, y: cy })
           }
           break
         }
         case 'color':
-          shapes.forEach(s => editor.updateShape({ id: s.id, type: s.type, props: { ...s.props, color: args } }))
+          selected.forEach(s => editor.updateShape({ id: s.id, type: s.type, props: { ...s.props, color: args } }))
           break
         case 'scale': {
           const f = parseFloat(args)
-          shapes.forEach(s => {
+          selected.forEach(s => {
             const p = s.props; const w = (p.w || 100) * f; const h = (p.h || 100) * f
             editor.updateShape({ id: s.id, type: s.type, x: s.x - (w - (p.w || 100)) / 2, y: s.y - (h - (p.h || 100)) / 2, props: { ...p, w, h } })
           })
@@ -134,7 +133,7 @@ function VoiceDrawInner() {
           const vp = editor.getViewportPageBounds()
           const pos = { left: { x: vp.x + 80, y: 'keep' }, right: { x: vp.x + vp.w - 200, y: 'keep' }, center: { x: vp.x + vp.w / 2 - 50, y: vp.y + vp.h / 2 - 50 }, top: { x: 'keep', y: vp.y + 80 }, bottom: { x: 'keep', y: vp.y + vp.h - 200 } }[args]
           if (!pos) break
-          shapes.forEach(s => editor.updateShape({ id: s.id, type: s.type, x: pos.x === 'keep' ? s.x : pos.x, y: pos.y === 'keep' ? s.y : pos.y }))
+          selected.forEach(s => editor.updateShape({ id: s.id, type: s.type, x: pos.x === 'keep' ? s.x : pos.x, y: pos.y === 'keep' ? s.y : pos.y }))
           break
         }
         case 'undo': editor.undo(); break
