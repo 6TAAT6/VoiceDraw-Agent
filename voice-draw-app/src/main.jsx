@@ -6,19 +6,21 @@ import { startListening, stopListening, checkSupport as checkSTT } from './speec
 import { speak, checkSupport as checkTTS } from './tts.js'
 import { route, splitCommands } from './intent-router.js'
 
+let idCounter = 0
+function uid() { return `vd_${Date.now()}_${idCounter++}` }
+
 function setStatus(state) {
   const text = document.getElementById('status-text')
   const dot = document.getElementById('status-dot')
   if (!text || !dot) return
-  const styles = {
+  const s = {
     idle: { text: '就绪', dotClass: 'dot-idle' },
     listening: { text: '正在听...', dotClass: 'dot-listening' },
     thinking: { text: '思考中...', dotClass: 'dot-thinking' },
     drawing: { text: '绘制中...', dotClass: 'dot-thinking' },
     speaking: { text: '播报中...', dotClass: 'dot-speaking' },
     error: { text: '出错了', dotClass: 'dot-error' },
-  }
-  const s = styles[state] || styles.idle
+  }[state] || { text: '就绪', dotClass: 'dot-idle' }
   text.textContent = s.text
   dot.className = s.dotClass
 }
@@ -34,45 +36,41 @@ function VoiceDrawInner() {
     setStatus('drawing')
     const { cmd, args } = result
     try {
+      const shapes = editor.getSelectedShapes()
+      const page = editor.getCurrentPagePoint({ x: editor.getViewportScreenBounds().x + editor.getViewportScreenBounds().w / 2, y: editor.getViewportScreenBounds().y + editor.getViewportScreenBounds().h / 2 })
+
       switch (cmd) {
         case 'create': {
-          const shapes = { circle: 'circle', rect: 'rectangle', triangle: 'triangle', diamond: 'diamond' }
-          const geo = shapes[args]
+          const geoMap = { circle: 'circle', rect: 'rectangle', triangle: 'triangle', diamond: 'diamond' }
+          const geo = geoMap[args]
           if (geo) {
-            const { x, y } = editor.getViewportScreenCenter()
-            editor.createShape({ type: 'geo', x, y, props: { geo } })
+            const p = editor.getCurrentPagePoint({ x: editor.getViewportScreenBounds().x + editor.getViewportScreenBounds().w / 2, y: editor.getViewportScreenBounds().y + editor.getViewportScreenBounds().h / 2 })
+            editor.createShapes([{ id: uid(), type: 'geo', x: p.x - 50, y: p.y - 50, props: { geo, w: 100, h: 100 } }])
           } else if (args && args.startsWith('label:')) {
-            const { x, y } = editor.getViewportScreenCenter()
-            editor.createShape({ type: 'text', x, y, props: { richText: [{ type: 'paragraph', content: [{ type: 'text', text: args.replace('label:', '') }] }] } })
+            const p = editor.getCurrentPagePoint({ x: editor.getViewportScreenBounds().x + editor.getViewportScreenBounds().w / 2, y: editor.getViewportScreenBounds().y + editor.getViewportScreenBounds().h / 2 })
+            editor.createShapes([{ id: uid(), type: 'text', x: p.x, y: p.y, props: { richText: [{ type: 'paragraph', content: [{ type: 'text', text: args.replace('label:', '') }] }] } }])
           } else {
-            const { x, y } = editor.getViewportScreenCenter()
-            editor.createShape({ type: args === 'arrow' ? 'arrow' : 'line', x, y })
+            const p = editor.getCurrentPagePoint({ x: editor.getViewportScreenBounds().x + editor.getViewportScreenBounds().w / 2, y: editor.getViewportScreenBounds().y + editor.getViewportScreenBounds().h / 2 })
+            editor.createShapes([{ id: uid(), type: args === 'arrow' ? 'arrow' : 'line', x: p.x - 50, y: p.y, props: args === 'arrow' ? {} : undefined }])
           }
           break
         }
-        case 'color': {
-          for (const shape of editor.getSelectedShapes()) {
-            editor.updateShape({ id: shape.id, type: shape.type, props: { ...shape.props, color: args } })
-          }
+        case 'color':
+          shapes.forEach(s => editor.updateShape({ id: s.id, type: s.type, props: { ...s.props, color: args } }))
           break
-        }
         case 'scale': {
-          const factor = parseFloat(args)
-          for (const shape of editor.getSelectedShapes()) {
-            const p = shape.props
-            const w = (p.w || 100) * factor; const h = (p.h || 100) * factor
-            editor.updateShape({ id: shape.id, type: shape.type, x: shape.x - (w - (p.w || 100)) / 2, y: shape.y - (h - (p.h || 100)) / 2, props: { ...p, w, h } })
-          }
+          const f = parseFloat(args)
+          shapes.forEach(s => {
+            const p = s.props; const w = (p.w || 100) * f; const h = (p.h || 100) * f
+            editor.updateShape({ id: s.id, type: s.type, x: s.x - (w - (p.w || 100)) / 2, y: s.y - (h - (p.h || 100)) / 2, props: { ...p, w, h } })
+          })
           break
         }
         case 'move': {
-          const vp = editor.getViewportScreenBounds()
-          const cx = vp.x + vp.w / 2; const cy = vp.y + vp.h / 2
-          const pos = { left: { x: vp.x + 80, y: 'keep' }, right: { x: vp.x + vp.w - 200, y: 'keep' }, center: { x: cx - 50, y: cy - 50 }, top: { x: 'keep', y: vp.y + 80 }, bottom: { x: 'keep', y: vp.y + vp.h - 200 } }[args]
+          const vp = editor.getViewportPageBounds()
+          const pos = { left: { x: vp.x + 80, y: 'keep' }, right: { x: vp.x + vp.w - 200, y: 'keep' }, center: { x: vp.x + vp.w / 2 - 50, y: vp.y + vp.h / 2 - 50 }, top: { x: 'keep', y: vp.y + 80 }, bottom: { x: 'keep', y: vp.y + vp.h - 200 } }[args]
           if (!pos) break
-          for (const shape of editor.getSelectedShapes()) {
-            editor.updateShape({ id: shape.id, type: shape.type, x: pos.x === 'keep' ? shape.x : pos.x, y: pos.y === 'keep' ? shape.y : pos.y })
-          }
+          shapes.forEach(s => editor.updateShape({ id: s.id, type: s.type, x: pos.x === 'keep' ? s.x : pos.x, y: pos.y === 'keep' ? s.y : pos.y }))
           break
         }
         case 'undo': editor.undo(); break
@@ -84,9 +82,9 @@ function VoiceDrawInner() {
         case 'selectAll': editor.selectAll(); break
         case 'template': case 'plan': speak('收到，正在绘制').catch(() => {}); break
       }
-      speak(cmd === 'create' ? '画好了' : '').catch(() => {})
+      if (cmd === 'create') speak('画好了').catch(() => {})
     } catch (err) {
-      console.error('[VoiceDraw] 执行失败:', err)
+      console.error(err)
       setStatus('error'); setTimeout(() => setStatus('idle'), 2000)
     } finally { setStatus('idle') }
   }, [editor])
@@ -99,11 +97,11 @@ function VoiceDrawInner() {
     isListening.current = true
     document.getElementById('mic-btn')?.classList.add('listening'); setStatus('listening')
     startListening({
-      onInterim: (text) => { const el = document.getElementById('status-text'); if (el) el.textContent = text || '正在听...' },
+      onInterim: (t) => { const el = document.getElementById('status-text'); if (el) el.textContent = t || '正在听...' },
       onResult: async (text) => {
         setStatus('thinking'); stopListening(); isListening.current = false
         document.getElementById('mic-btn')?.classList.remove('listening')
-        for (const cmdText of splitCommands(text)) await executeCommand(await route(cmdText))
+        for (const c of splitCommands(text)) await executeCommand(await route(c))
       },
       onError: () => { setStatus('error'); isListening.current = false; document.getElementById('mic-btn')?.classList.remove('listening'); setTimeout(() => setStatus('idle'), 2000) },
     })
@@ -124,5 +122,4 @@ function VoiceDrawInner() {
 function App() {
   return <div style={{ width: '100vw', height: '100vh' }}><Tldraw><VoiceDrawInner /></Tldraw></div>
 }
-
 createRoot(document.getElementById('app')).render(<App />)
