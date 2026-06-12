@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Tldraw, useEditor } from 'tldraw'
+import { Tldraw, useEditor, createShapeId } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { startListening, stopListening, checkSupport as checkSTT } from './speech.js'
 import { speak, checkSupport as checkTTS } from './tts.js'
@@ -8,9 +8,6 @@ import { route, splitCommands } from './intent-router.js'
 import { loadScene } from './templates.js'
 import { layout } from './layout-engine.js'
 import { toListening, toThinking, toDrawing, toSpeaking, toIdle, confirm as smConfirm, hasPendingConfirm, onChange } from './state-machine.js'
-
-let idCounter = 0
-function uid() { return `vd_${Date.now()}_${idCounter++}` }
 
 import { set as setAlias } from './canvas-memory.js'
 
@@ -48,14 +45,14 @@ function executePlan(editor, plan) {
 
     if (!def) {
       editor.createShape({
-        id: uid(), type: 'text', x, y,
+        id: createShapeId(), type: 'text', x, y,
         props: { richText: [{ type: 'paragraph', content: [{ type: 'text', text: p.type || '?' }] }] },
       })
       drawn++
       continue
     }
 
-    const id = uid()
+    const id = createShapeId()
     editor.createShape({
       id, type: 'geo', x, y,
       props: { geo: 'rectangle', w: p.w, h: p.h, color: 'light-violet' },
@@ -63,7 +60,7 @@ function executePlan(editor, plan) {
 
     if (def.label) {
       editor.createShape({
-        id: uid(), type: 'text', x: x + 8, y: y + 4,
+        id: createShapeId(), type: 'text', x: x + 8, y: y + 4,
         props: { richText: [{ type: 'paragraph', content: [{ type: 'text', text: def.label }] }] },
       })
     }
@@ -114,17 +111,17 @@ function VoiceDrawInner() {
 
       switch (cmd) {
         case 'create': {
-          const geoMap = { circle: 'circle', rect: 'rectangle', triangle: 'triangle', diamond: 'diamond' }
+          const geoMap = { circle: 'ellipse', rect: 'rectangle', triangle: 'triangle', diamond: 'diamond' }
           const geo = geoMap[args]
           if (geo) {
-            editor.createShape({ id: uid(), type: 'geo', x: cx - 50, y: cy - 50, props: { geo, w: 100, h: 100 } })
+            editor.createShape({ id: createShapeId(), type: 'geo', x: cx - 50, y: cy - 50, props: { geo, w: 100, h: 100 } })
           } else if (args && args.startsWith('label:')) {
-            editor.createShape({ id: uid(), type: 'text', x: cx, y: cy, props: { richText: [{ type: 'paragraph', content: [{ type: 'text', text: args.replace('label:', '') }] }] } })
+            editor.createShape({ id: createShapeId(), type: 'text', x: cx, y: cy, props: { richText: [{ type: 'paragraph', content: [{ type: 'text', text: args.replace('label:', '') }] }] } })
           } else if (TYPE_MAP[args]) {
             const def = TYPE_MAP[args]
-            editor.createShape({ id: uid(), type: 'geo', x: cx - def.w / 2, y: cy, props: { geo: 'rectangle', w: def.w, h: def.h, color: 'light-violet' } })
+            editor.createShape({ id: createShapeId(), type: 'geo', x: cx - def.w / 2, y: cy, props: { geo: 'rectangle', w: def.w, h: def.h, color: 'light-violet' } })
           } else {
-            editor.createShape({ id: uid(), type: args === 'arrow' ? 'arrow' : 'line', x: cx - 50, y: cy })
+            editor.createShape({ id: createShapeId(), type: args === 'arrow' ? 'arrow' : 'line', x: cx - 50, y: cy })
           }
           break
         }
