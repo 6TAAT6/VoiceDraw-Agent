@@ -4,6 +4,7 @@ from fastapi import APIRouter, UploadFile, File
 from pydantic import BaseModel
 from deepseek_planner import plan
 from asr_auth import recognize
+from kodo_uploader import upload_json, download_json, list_files
 
 router = APIRouter(prefix="/api")
 
@@ -59,3 +60,26 @@ async def asr_recognize(audio: UploadFile = File(...)):
     if text:
         return {"text": text}
     return {"text": "", "error": "未识别到语音"}
+
+
+@router.post("/snapshot/save")
+async def snapshot_save(data: dict):
+    """保存画布快照到 Kodo"""
+    from datetime import datetime
+    key = f"project_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+    ok = await upload_json(key, data)
+    return {"ok": ok, "key": key if ok else None}
+
+
+@router.get("/snapshot/latest")
+async def snapshot_latest():
+    """恢复最近快照"""
+    try:
+        files = await list_files("project_", 5)
+        if not files:
+            return {"data": None}
+        latest = sorted(files)[-1]
+        data = await download_json(latest)
+        return {"data": data}
+    except Exception:
+        return {"data": None}

@@ -9,7 +9,7 @@ import { loadScene } from './templates.js'
 import { layout } from './layout-engine.js'
 import { toListening, toThinking, toDrawing, toSpeaking, toIdle, confirm as smConfirm, hasPendingConfirm, onChange } from './state-machine.js'
 
-import { set as setAlias } from './canvas-memory.js'
+import { set as setAlias, snapshot, restore } from './canvas-memory.js'
 
 // ====== Task → Shape 映射 ======
 const TYPE_MAP = {
@@ -98,6 +98,24 @@ function VoiceDrawInner() {
     window.__editor = editor
     return onChange(updateStatusUI)
   }, [editor])
+
+  useEffect(() => {
+    // 启动时恢复最近快照
+    fetch('/api/snapshot/latest').then(r => r.json()).then(d => {
+      if (d?.data) restore(d.data)
+    }).catch(() => {})
+    // 每 30 秒自动保存
+    const timer = setInterval(() => {
+      const data = snapshot()
+      if (!data || !data.length) return
+      fetch('/api/snapshot/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.fromEntries(data)),
+      }).catch(() => {})
+    }, 30000)
+    return () => clearInterval(timer)
+  }, [])
 
   const executeCommand = useCallback(async (result) => {
     if (!result || result.cmd === 'noop' || result.cmd === 'unknown') return
