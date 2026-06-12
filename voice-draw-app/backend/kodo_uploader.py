@@ -55,10 +55,11 @@ async def list_files(prefix: str = "project_", limit: int = 20) -> list[str]:
     if not QINIU_KODO_ACCESS_KEY:
         return []
     try:
-        ret, info = await asyncio.to_thread(
+        result = await asyncio.to_thread(
             _get_bucket_mgr().list, QINIU_KODO_BUCKET, prefix=prefix, limit=limit
         )
-        if info.status_code != 200:
+        ret, _, info = result[0], result[1], result[2]
+        if not hasattr(info, 'status_code') or info.status_code != 200:
             return []
         return [item.get("key") for item in ret.get("items", [])]
     except Exception as e:
@@ -86,11 +87,15 @@ async def _get_domain() -> str:
     if _bucket_domain:
         return _bucket_domain
     try:
-        ret, info = await asyncio.to_thread(
+        result = await asyncio.to_thread(
             _get_bucket_mgr().bucket_domain, QINIU_KODO_BUCKET
         )
-        if ret and len(ret) > 0:
-            _bucket_domain = ret[0]
+        domains = result[0]
+        if domains and len(domains) > 0:
+            if isinstance(domains[0], str):
+                _bucket_domain = domains[0]
+            elif isinstance(domains[0], dict):
+                _bucket_domain = domains[0].get("domain", f"{QINIU_KODO_BUCKET}.qiniucdn.com")
         else:
             _bucket_domain = f"{QINIU_KODO_BUCKET}.qiniucdn.com"
     except Exception:
