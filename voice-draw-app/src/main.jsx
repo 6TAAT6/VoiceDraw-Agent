@@ -202,8 +202,25 @@ function VoiceDrawInner() {
     btn.addEventListener('click', handleSpeech)
     const onKey = (e) => { if (e.key === ' ' && e.target === document.body) { e.preventDefault(); handleSpeech() } }
     document.addEventListener('keydown', onKey)
-    return () => { btn.removeEventListener('click', handleSpeech); document.removeEventListener('keydown', onKey) }
-  }, [handleSpeech])
+
+    // 文本输入框：回车提交
+    const input = document.getElementById('text-input')
+    if (!input) return
+    const onInputEnter = async (e) => {
+      if (e.key !== 'Enter') return
+      const text = input.value.trim()
+      if (!text) return
+      input.value = ''
+      toThinking()
+      for (const c of splitCommands(text)) await executeCommand(await route(c))
+    }
+    input.addEventListener('keydown', onInputEnter)
+    return () => {
+      btn.removeEventListener('click', handleSpeech)
+      document.removeEventListener('keydown', onKey)
+      input.removeEventListener('keydown', onInputEnter)
+    }
+  }, [handleSpeech, executeCommand])
 
   useEffect(() => { console.log('[VoiceDraw] STT:', checkSTT(), 'TTS:', checkTTS()); toIdle() }, [])
   return null
