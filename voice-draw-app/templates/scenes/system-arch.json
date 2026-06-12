@@ -1,0 +1,9 @@
+{
+  "scene_name": "系统架构图",
+  "layout_hint": "top-down",
+  "tasks": [
+    { "action": "create", "type": "navbar", "alias": "负载均衡层" },
+    { "action": "create", "type": "card-grid", "alias": "应用服务层", "props": { "columns": 3, "card_count": 3 } },
+    { "action": "create", "type": "table", "alias": "数据库层", "props": { "rows": 3, "cols": 4 } }
+  ]
+}

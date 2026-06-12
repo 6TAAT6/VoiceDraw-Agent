@@ -1,0 +1,10 @@
+{
+  "scene_name": "登录页",
+  "layout_hint": "centered",
+  "tasks": [
+    { "action": "create", "type": "hero-section", "alias": "欢迎区域" },
+    { "action": "create", "type": "form", "alias": "登录表单" },
+    { "action": "create", "type": "button", "alias": "登录按钮", "props": { "label": "登录" } },
+    { "action": "create", "type": "button", "alias": "注册按钮", "props": { "label": "注册" } }
+  ]
+}
