@@ -1,124 +1,98 @@
 // ============================================================
-// VoiceDraw Agent — 语音识别 (七牛云 ASR WebSocket)
+// VoiceDraw Agent — 语音识别 (MediaRecorder + 七牛云 ASR)
 // ============================================================
 
-let asrWs = null
-let audioCtx = null
-let scriptNode = null
-let micStream = null
-let asrActive = false
+let mediaRecorder = null
+let audioChunks = []
+let silenceTimer = null
 
-async function startQiniuASR({ onResult, onInterim, onError, onStart, onEnd }) {
-  const tokenResp = await fetch('/api/asr/token')
-  const tokenData = await tokenResp.json()
-  if (!tokenData.available) throw new Error(tokenData.reason || 'ASR 不可用')
-
-  const wsUrl = `${tokenData.url}?token=${encodeURIComponent(tokenData.token)}`
-  asrWs = new WebSocket(wsUrl)
-
-  await new Promise((resolve, reject) => {
-    asrWs.onopen = resolve
-    asrWs.onerror = () => reject(new Error('ASR 连接失败'))
-    setTimeout(() => reject(new Error('ASR 连接超时')), 5000)
-  })
-
-  asrWs.send(JSON.stringify({
-    cmd: 'start',
-    params: { audio_format: 'pcm', sample_rate: 16000, channels: 1, bits_per_sample: 16 },
-  }))
-
-  let interimText = ''
-
-  asrWs.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data)
-      if (msg.type === 'final' && msg.text) {
-        interimText = ''
-        onResult?.(msg.text.trim())
-      } else if (msg.type === 'interim' && msg.text) {
-        interimText = msg.text
-        onInterim?.(interimText)
-      } else if (msg.type === 'error') {
-        onError?.(new Error(msg.message || 'ASR 错误'))
-      }
-    } catch (_) {}
+async function startRecording({ onResult, onInterim, onError, onStart, onEnd }) {
+  // 检查 ASR 可用性
+  try {
+    const resp = await fetch('/api/asr/token')
+    const data = await resp.json()
+    if (!data.available) throw new Error('ASR 不可用')
+  } catch (e) {
+    throw new Error('ASR 服务未连接')
   }
 
-  asrWs.onerror = () => onError?.(new Error('ASR 异常'))
-  asrWs.onclose = () => {
-    if (asrActive && interimText) onResult?.(interimText.trim())
-    asrActive = false
+  // 打开麦克风
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+  const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+    ? 'audio/webm;codecs=opus'
+    : 'audio/webm'
+
+  mediaRecorder = new MediaRecorder(stream, { mimeType })
+  audioChunks = []
+
+  mediaRecorder.ondataavailable = (e) => {
+    if (e.data.size > 0) audioChunks.push(e.data)
+  }
+
+  mediaRecorder.onstart = () => onStart?.()
+
+  mediaRecorder.onstop = async () => {
+    stream.getTracks().forEach(t => t.stop())
+    clearTimeout(silenceTimer)
+
+    if (!audioChunks.length) {
+      onResult?.('')
+      onEnd?.()
+      return
+    }
+
+    const blob = new Blob(audioChunks, { type: 'audio/webm' })
+
+    try {
+      const formData = new FormData()
+      formData.append('audio', blob, 'recording.webm')
+
+      const resp = await fetch('/api/asr/recognize', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await resp.json()
+
+      if (data.text) {
+        onResult?.(data.text)
+      } else {
+        const msg = data.error || '未识别到语音'
+        onError?.(new Error(msg))
+      }
+    } catch (err) {
+      onError?.(err)
+    }
     onEnd?.()
   }
 
-  micStream = await navigator.mediaDevices.getUserMedia({
-    audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
-  })
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 })
-  const source = audioCtx.createMediaStreamSource(micStream)
-  scriptNode = audioCtx.createScriptProcessor(4096, 1, 1)
-
-  scriptNode.onaudioprocess = (event) => {
-    if (!asrActive || !asrWs || asrWs.readyState !== WebSocket.OPEN) return
-    const input = event.inputBuffer.getChannelData(0)
-    const pcm = new Int16Array(input.length)
-    for (let i = 0; i < input.length; i++) {
-      const s = Math.max(-1, Math.min(1, input[i]))
-      pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF
-    }
-    asrWs.send(pcm.buffer)
-  }
-
-  source.connect(scriptNode)
-  const gainNode = audioCtx.createGain()
-  gainNode.gain.value = 0
-  scriptNode.connect(gainNode)
-  gainNode.connect(audioCtx.destination)
-
-  asrActive = true
-  onStart?.()
-
-  let silenceTimer
-  const resetSilence = () => {
-    clearTimeout(silenceTimer)
-    silenceTimer = setTimeout(() => { if (asrActive) stopQiniuASR() }, 3000)
-  }
-  const origOnMsg = asrWs.onmessage
-  asrWs.onmessage = (event) => { resetSilence(); origOnMsg?.(event) }
-  resetSilence()
-}
-
-function stopQiniuASR() {
-  asrActive = false
-  try {
-    if (asrWs && asrWs.readyState === WebSocket.OPEN) {
-      asrWs.send(JSON.stringify({ cmd: 'stop' }))
-      asrWs.close()
-    }
-  } catch (_) {}
-  try { scriptNode?.disconnect() } catch (_) {}
-  try { audioCtx?.close() } catch (_) {}
-  try { micStream?.getTracks().forEach(t => t.stop()) } catch (_) {}
-  asrWs = null; audioCtx = null; scriptNode = null; micStream = null
+  // 开始录音
+  mediaRecorder.start(250) // 每 250ms 输出一个 chunk
 }
 
 export function checkSupport() {
-  return !!navigator.mediaDevices?.getUserMedia
+  try {
+    return !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder)
+  } catch {
+    return false
+  }
 }
 
 export async function startListening(callbacks = {}) {
   try {
-    await startQiniuASR(callbacks)
+    await startRecording(callbacks)
   } catch (err) {
-    console.warn('[Speech]', err.message)
     callbacks.onError?.(err)
   }
 }
 
 export function stopListening() {
-  stopQiniuASR()
+  clearTimeout(silenceTimer)
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop()
+  }
 }
 
 export function destroy() {
   stopListening()
+  mediaRecorder = null
 }
