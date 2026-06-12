@@ -102,14 +102,15 @@ function VoiceDrawInner() {
   useEffect(() => {
     // 启动时恢复最近快照
     fetch('/api/snapshot/latest').then(r => r.json()).then(async d => {
-      if (d?.data && typeof d.data === 'string') {
+      if (d?.data) {
         try {
-          const result = parseTldrawJsonFile({ schema: editor.store.schema, jsonStr: d.data })
+          const jsonStr = typeof d.data === 'string' ? d.data : JSON.stringify(d.data)
+          const result = parseTldrawJsonFile({ schema: editor.store.schema, jsonStr })
           if (!result.error) {
             editor.loadSnapshot(result.value.getStoreSnapshot())
             editor.clearHistory()
           }
-        } catch (_) {}
+        } catch (e) { console.warn('Snapshot restore failed:', e) }
       }
       if (d?.alias) restore(d.alias)
     }).catch(() => {})
