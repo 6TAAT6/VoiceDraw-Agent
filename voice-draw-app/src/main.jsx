@@ -102,34 +102,22 @@ function VoiceDrawInner() {
   useEffect(() => {
     // 启动时恢复最近快照
     fetch('/api/snapshot/latest').then(r => r.json()).then(d => {
-      if (d?.data && typeof d.data === 'string') {
+      if (d?.data) {
         try {
-          const doc = JSON.parse(d.data)
-          if (doc.records) {
-            editor.store.mergeRemoteChanges(() => {
-              for (const r of doc.records) {
-                editor.store.put([r])
-              }
-            })
-          }
+          editor.loadSnapshot({ store: d.data })
         } catch (_) {}
       }
-      // 恢复 alias 内存
       if (d?.alias) restore(d.alias)
     }).catch(() => {})
     // 每 30 秒自动保存
     const timer = setInterval(() => {
       const doc = editor.store.serialize()
       const aliasData = snapshot()
-      const payload = {
-        alias: Object.fromEntries(aliasData),
-        data: JSON.stringify(doc),
-      }
-      if (!payload.data) return
+      if (!doc) return
       fetch('/api/snapshot/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ alias: Object.fromEntries(aliasData), data: doc }),
       }).catch(() => {})
     }, 30000)
     return () => clearInterval(timer)
@@ -192,13 +180,13 @@ function VoiceDrawInner() {
         case 'undo': editor.undo(); break
         case 'save':
           speak('正在保存').catch(() => {})
-          const doc = editor.store.serialize()
-          const aliasData = Object.fromEntries(snapshot())
+          const sdoc = editor.store.serialize()
+          const sAliasData = Object.fromEntries(snapshot())
           fetch('/api/snapshot/save', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ alias: aliasData, data: JSON.stringify(doc) }),
-          }).then(r => r.json()).then(d => {
-            if (d.ok) speak('已保存').catch(() => {})
+            body: JSON.stringify({ alias: sAliasData, data: sdoc }),
+          }).then(r => r.json()).then(j => {
+            if (j.ok) speak('已保存').catch(() => {})
             else speak('保存失败').catch(() => {})
           }).catch(() => speak('保存失败').catch(() => {}))
           break
