@@ -1,118 +1,201 @@
 // ============================================================
-// VoiceDraw Agent — 语音识别模块
-// 主力: Web Speech API | 备用: 七牛云 ASR (未实现)
+// VoiceDraw Agent — 语音识别
+// 主力: 七牛云 ASR WebSocket  |  备用: Web Speech API
 // ============================================================
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
 
-let recognition = null
-let isSupported = !!SpeechRecognition
+// ====== Web Speech (fallback) ======
 
-// 连续错误计数器 (用于触达 fallback)
-let consecutiveErrors = 0
-const ERROR_THRESHOLD = 3
+let webSpeechReco = null
 
-/**
- * 检查浏览器是否支持语音识别
- */
-export function checkSupport() {
-  return isSupported
+function checkWebSpeech() {
+  return !!SpeechRecognition
 }
 
-/**
- * 开始语音监听
- * @param {Object} callbacks
- * @param {function} callbacks.onResult    — 最终识别文本 (string)
- * @param {function} callbacks.onInterim   — 实时临时文本 (string)
- * @param {function} callbacks.onError     — 错误 (Error)
- * @param {function} callbacks.onStart     — 开始拾音
- * @param {function} callbacks.onEnd       — 停止拾音
- */
-export function startListening({ onResult, onInterim, onError, onStart, onEnd } = {}) {
-  if (!isSupported) {
-    onError?.(new Error('Web Speech API 不可用'))
-    return
+function startWebSpeech({ onResult, onInterim, onError, onStart, onEnd }) {
+  if (!webSpeechReco) {
+    webSpeechReco = new SpeechRecognition()
+    webSpeechReco.lang = 'zh-CN'
+    webSpeechReco.interimResults = true
+    webSpeechReco.continuous = false
+    webSpeechReco.maxAlternatives = 1
   }
 
-  // 复用实例避免重复创建
-  if (!recognition) {
-    recognition = new SpeechRecognition()
-    recognition.lang = 'zh-CN'
-    recognition.interimResults = true
-    recognition.continuous = false  // 单句模式，静音自动结束
-    recognition.maxAlternatives = 1
-  }
-
-  recognition.onstart = () => {
-    consecutiveErrors = 0
-    onStart?.()
-  }
-
-  recognition.onresult = (event) => {
-    let interim = ''
-    let final = ''
-
+  webSpeechReco.onstart = () => onStart?.()
+  webSpeechReco.onresult = (event) => {
+    let interim = '', final = ''
     for (let i = event.resultIndex; i < event.results.length; i++) {
-      const transcript = event.results[i][0].transcript
-      const confidence = event.results[i][0].confidence
-
+      const t = event.results[i][0].transcript
       if (event.results[i].isFinal) {
-        // 置信度检查 (L2 容错)
-        if (confidence < 0.6) {
-          onError?.(new Error('置信度过低，请再说一次'))
+        if (event.results[i][0].confidence < 0.6) {
+          onError?.(new Error('置信度过低'))
           return
         }
-        final += transcript
-      } else {
-        interim += transcript
-      }
+        final += t
+      } else { interim += t }
     }
-
     if (final) onResult?.(final.trim())
     if (interim) onInterim?.(interim.trim())
   }
-
-  recognition.onerror = (event) => {
-    consecutiveErrors++
+  webSpeechReco.onerror = (event) => {
     const msg = {
       'no-speech': '未检测到语音',
       'audio-capture': '麦克风未找到',
       'not-allowed': '麦克风权限被拒绝',
       'network': '网络错误',
     }[event.error] || event.error
+    onError?.(new Error(msg))
+  }
+  webSpeechReco.onend = () => onEnd?.()
 
-    onError?.(new Error(`[${event.error}] ${msg}`))
+  try { webSpeechReco.start() } catch (err) { onError?.(err) }
+}
 
-    // 连续错误超阈值 → 建议切换 fallback
-    if (consecutiveErrors >= ERROR_THRESHOLD) {
-      onError?.(new Error('Web Speech 连续失败，建议切换七牛云 ASR'))
-    }
+function stopWebSpeech() {
+  if (webSpeechReco) { try { webSpeechReco.stop() } catch (_) {} }
+}
+
+// ====== 七牛云 ASR WebSocket (主力) ======
+
+let asrWs = null
+let audioCtx = null
+let scriptNode = null
+let micStream = null
+let asrActive = false
+
+async function startQiniuASR({ onResult, onInterim, onError, onStart, onEnd }) {
+  // 1) 获取 token
+  const tokenResp = await fetch('/api/asr/token')
+  const tokenData = await tokenResp.json()
+  if (!tokenData.available) throw new Error(tokenData.reason || 'ASR 不可用')
+
+  // 2) 建立 WebSocket
+  const wsUrl = `${tokenData.url}?token=${encodeURIComponent(tokenData.token)}`
+  asrWs = new WebSocket(wsUrl)
+
+  await new Promise((resolve, reject) => {
+    asrWs.onopen = resolve
+    asrWs.onerror = () => reject(new Error('ASR 连接失败'))
+    setTimeout(() => reject(new Error('ASR 连接超时')), 5000)
+  })
+
+  // 3) 发送开始指令
+  asrWs.send(JSON.stringify({
+    cmd: 'start',
+    params: { audio_format: 'pcm', sample_rate: 16000, channels: 1, bits_per_sample: 16 },
+  }))
+
+  let interimText = ''
+
+  asrWs.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data)
+      if (msg.type === 'final' && msg.text) {
+        interimText = ''
+        onResult?.(msg.text.trim())
+      } else if (msg.type === 'interim' && msg.text) {
+        interimText = msg.text
+        onInterim?.(interimText)
+      } else if (msg.type === 'error') {
+        onError?.(new Error(msg.message || 'ASR 错误'))
+      }
+    } catch (_) {}
   }
 
-  recognition.onend = () => {
+  asrWs.onerror = () => onError?.(new Error('ASR 异常'))
+  asrWs.onclose = () => {
+    if (asrActive && interimText) onResult?.(interimText.trim())
+    asrActive = false
     onEnd?.()
   }
 
+  // 4) 打开麦克风，PCM 流送
+  micStream = await navigator.mediaDevices.getUserMedia({
+    audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
+  })
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 })
+  const source = audioCtx.createMediaStreamSource(micStream)
+  scriptNode = audioCtx.createScriptProcessor(4096, 1, 1)
+
+  scriptNode.onaudioprocess = (event) => {
+    if (!asrActive || !asrWs || asrWs.readyState !== WebSocket.OPEN) return
+    const input = event.inputBuffer.getChannelData(0)
+    const pcm = new Int16Array(input.length)
+    for (let i = 0; i < input.length; i++) {
+      const s = Math.max(-1, Math.min(1, input[i]))
+      pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF
+    }
+    asrWs.send(pcm.buffer)
+  }
+
+  source.connect(scriptNode)
+  const gainNode = audioCtx.createGain()
+  gainNode.gain.value = 0
+  scriptNode.connect(gainNode)
+  gainNode.connect(audioCtx.destination)
+
+  asrActive = true
+  onStart?.()
+
+  // 5) 静音 3 秒自动停止
+  let silenceTimer
+  const resetSilence = () => {
+    clearTimeout(silenceTimer)
+    silenceTimer = setTimeout(() => { if (asrActive) stopQiniuASR() }, 3000)
+  }
+  const origOnMsg = asrWs.onmessage
+  asrWs.onmessage = (event) => { resetSilence(); origOnMsg?.(event) }
+  resetSilence()
+}
+
+function stopQiniuASR() {
+  asrActive = false
   try {
-    recognition.start()
+    if (asrWs && asrWs.readyState === WebSocket.OPEN) {
+      asrWs.send(JSON.stringify({ cmd: 'stop' }))
+      asrWs.close()
+    }
+  } catch (_) {}
+  try { scriptNode?.disconnect() } catch (_) {}
+  try { audioCtx?.close() } catch (_) {}
+  try { micStream?.getTracks().forEach(t => t.stop()) } catch (_) {}
+  asrWs = null; audioCtx = null; scriptNode = null; micStream = null
+}
+
+// ====== 统一接口 ======
+
+let activeEngine = null
+
+export function checkSupport() {
+  return !!(navigator.mediaDevices?.getUserMedia) || checkWebSpeech()
+}
+
+export async function startListening(callbacks = {}) {
+  try {
+    await startQiniuASR(callbacks)
+    activeEngine = 'qiniu'
+    return
   } catch (err) {
-    onError?.(err)
+    console.warn('[Speech] 七牛 ASR 不可用，降级 Web Speech:', err.message)
+    stopQiniuASR()
   }
+
+  if (checkWebSpeech()) {
+    startWebSpeech(callbacks)
+    activeEngine = 'webspeech'
+    return
+  }
+  callbacks.onError?.(new Error('语音识别不可用'))
 }
 
-/**
- * 手动停止监听
- */
 export function stopListening() {
-  if (recognition) {
-    try { recognition.stop() } catch (_) { /* 忽略未启动时的 stop 异常 */ }
-  }
+  if (activeEngine === 'qiniu') stopQiniuASR()
+  else if (activeEngine === 'webspeech') stopWebSpeech()
+  activeEngine = null
 }
 
-/**
- * 销毁 recognition 实例
- */
 export function destroy() {
   stopListening()
-  recognition = null
+  webSpeechReco = null
 }

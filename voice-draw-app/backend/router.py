@@ -2,6 +2,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 from deepseek_planner import plan
+from asr_auth import generate_asr_token
 
 router = APIRouter(prefix="/api")
 
@@ -27,3 +28,11 @@ async def plan_endpoint(req: PlanRequest):
 @router.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@router.get("/asr/token")
+async def asr_token():
+    result = generate_asr_token()
+    if result is None:
+        return {"available": False, "reason": "ASR 密钥未配置"}
+    return {"available": True, **result}
