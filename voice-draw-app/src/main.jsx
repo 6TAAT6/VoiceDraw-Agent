@@ -102,16 +102,34 @@ function VoiceDrawInner() {
   useEffect(() => {
     // 启动时恢复最近快照
     fetch('/api/snapshot/latest').then(r => r.json()).then(d => {
-      if (d?.data) restore(d.data)
+      if (d?.data && typeof d.data === 'string') {
+        try {
+          const doc = JSON.parse(d.data)
+          if (doc.records) {
+            editor.store.mergeRemoteChanges(() => {
+              for (const r of doc.records) {
+                editor.store.put([r])
+              }
+            })
+          }
+        } catch (_) {}
+      }
+      // 恢复 alias 内存
+      if (d?.alias) restore(d.alias)
     }).catch(() => {})
     // 每 30 秒自动保存
     const timer = setInterval(() => {
-      const data = snapshot()
-      if (!data || !data.length) return
+      const doc = editor.store.serialize()
+      const aliasData = snapshot()
+      const payload = {
+        alias: Object.fromEntries(aliasData),
+        data: JSON.stringify(doc),
+      }
+      if (!payload.data) return
       fetch('/api/snapshot/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(Object.fromEntries(data)),
+        body: JSON.stringify(payload),
       }).catch(() => {})
     }, 30000)
     return () => clearInterval(timer)
@@ -174,10 +192,11 @@ function VoiceDrawInner() {
         case 'undo': editor.undo(); break
         case 'save':
           speak('正在保存').catch(() => {})
-          const saveData = Object.fromEntries(snapshot())
+          const doc = editor.store.serialize()
+          const aliasData = Object.fromEntries(snapshot())
           fetch('/api/snapshot/save', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(saveData),
+            body: JSON.stringify({ alias: aliasData, data: JSON.stringify(doc) }),
           }).then(r => r.json()).then(d => {
             if (d.ok) speak('已保存').catch(() => {})
             else speak('保存失败').catch(() => {})
