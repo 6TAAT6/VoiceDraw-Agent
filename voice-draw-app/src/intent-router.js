@@ -36,8 +36,10 @@ async function matchL4(text) {
 export async function route(rawText) {
   const text = preprocess(rawText)
   if (!text) return { source: 'preprocess', cmd: 'noop', args: null, raw: rawText }
-  return matchL1(text) || matchL2(text) || matchL3(text) || await matchL4(text) || matchL8(text)
+  const result = matchL1(text) || matchL2(text) || matchL3(text) || await matchL4(text) || matchL8(text)
     || { source: 'none', cmd: 'unknown', args: null, raw: text }
+  result.raw = rawText // 保留原始文本，供颜色提取
+  return result
 }
 
 export function splitCommands(text) {
