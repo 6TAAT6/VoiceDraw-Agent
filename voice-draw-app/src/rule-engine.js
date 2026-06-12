@@ -5,7 +5,7 @@
 
 // ========== Step 0: 预处理 ==========
 
-const FILLERS = /嗯|啊|那个|就是|这个|然后呢|那个啥|额|呃/g
+const FILLERS = /嗯|啊|那个|就是|这个|然后呢|那个啥|额|呃|…|\.{3,}/g
 
 const HOMOPHONE_MAP = {
   '话圆': '画圆',
@@ -76,8 +76,8 @@ const L2_KEYWORDS = [
   { keys: ['清空', '全部删除', '删除所有'], cmd: 'clear' },
   { keys: ['保存', '存储'], cmd: 'save' },
   { keys: ['导出', '下载'], cmd: 'export' },
-  { keys: ['分组', '组合', '组成一组'], cmd: 'group' },
   { keys: ['取消分组', '解散', '解组'], cmd: 'ungroup' },
+  { keys: ['分组', '组合', '组成一组'], cmd: 'group' },
   { keys: ['删除'], cmd: 'delete' },
   { keys: ['复制', '拷贝'], cmd: 'copy' },
   { keys: ['粘贴'], cmd: 'paste' },
