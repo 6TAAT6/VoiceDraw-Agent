@@ -26,6 +26,8 @@ export function preprocess(text) {
   for (const [wrong, correct] of Object.entries(HOMOPHONE_MAP)) {
     if (cleaned.includes(wrong)) cleaned = cleaned.replace(wrong, correct)
   }
+  // 去除"颜色的"修饰语：画一个红色的圆 → 画一个圆
+  cleaned = cleaned.replace(/(红|蓝|绿|黄|黑|白|紫|橙|灰|深蓝|浅蓝|粉红?)色?的/g, '')
   return cleaned
 }
 
