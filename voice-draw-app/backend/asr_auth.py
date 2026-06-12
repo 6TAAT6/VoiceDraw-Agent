@@ -1,55 +1,34 @@
-"""VoiceDraw Agent — 七牛云 ASR (HTTP 提交/查询模式)"""
-import httpx
-from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL
+"""VoiceDraw Agent — 七牛云短语音听写 (base64 直传, 官方 SDK 签名)"""
+import json
+import asyncio
+import requests
+import qiniu
+from qiniu import QiniuMacAuth
+from config import QINIU_ASR_ACCESS_KEY, QINIU_ASR_SECRET_KEY
 
-# ASR 跟 DeepSeek 共用 base URL 和 API Key
-ASR_SUBMIT_URL = f"{DEEPSEEK_BASE_URL}/voice/asr/submit"
-ASR_QUERY_URL = f"{DEEPSEEK_BASE_URL}/voice/asr/query"
-
-
-async def submit_asr(audio_url: str, audio_format: str = "wav") -> dict | None:
-    """提交音频 URL 进行识别，返回 {reqid, ...}"""
-    if not DEEPSEEK_API_KEY:
-        return None
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
-            resp = await client.post(
-                ASR_SUBMIT_URL,
-                headers={
-                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "asr",
-                    "audio": {
-                        "format": audio_format,
-                        "url": audio_url,
-                    },
-                },
-            )
-            resp.raise_for_status()
-            return resp.json()
-    except Exception as e:
-        print(f"[ASR] submit 失败: {e}")
-        return None
+ASR_URL = "http://yitu-audio.qiniuapi.com/v2/asr"
 
 
-async def query_asr(reqid: str) -> dict | None:
-    """根据 reqid 查询识别结果"""
-    if not DEEPSEEK_API_KEY:
-        return None
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
-            resp = await client.post(
-                ASR_QUERY_URL,
-                headers={
-                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={"reqid": reqid},
-            )
-            resp.raise_for_status()
-            return resp.json()
-    except Exception as e:
-        print(f"[ASR] query 失败: {e}")
-        return None
+async def recognize(audio_b64: str) -> str:
+    """传 base64 音频，返回识别文本。失败返回空字符串。"""
+    if not QINIU_ASR_ACCESS_KEY or not QINIU_ASR_SECRET_KEY:
+        return ""
+
+    body = {"audioBase64": audio_b64, "lang": "MANDARIN", "scene": "GENERAL"}
+    auth = QiniuMacAuth(QINIU_ASR_ACCESS_KEY, QINIU_ASR_SECRET_KEY)
+    qn_auth = qiniu.auth.QiniuMacRequestsAuth(auth)
+
+    def _post():
+        try:
+            r = requests.post(ASR_URL, json=body, auth=qn_auth, timeout=15)
+            return r
+        except Exception as e:
+            print(f"[ASR] {e}")
+            return None
+
+    resp = await asyncio.to_thread(_post)
+    if resp is None or resp.status_code != 200:
+        return ""
+
+    data = resp.json()
+    return data.get("resultText", "") if data.get("rtn") == 0 else ""
