@@ -113,6 +113,9 @@ function VoiceDrawInner() {
             editor.createShape({ id: uid(), type: 'geo', x: cx - 50, y: cy - 50, props: { geo, w: 100, h: 100 } })
           } else if (args && args.startsWith('label:')) {
             editor.createShape({ id: uid(), type: 'text', x: cx, y: cy, props: { richText: [{ type: 'paragraph', content: [{ type: 'text', text: args.replace('label:', '') }] }] } })
+          } else if (TYPE_MAP[args]) {
+            const def = TYPE_MAP[args]
+            editor.createShape({ id: uid(), type: 'geo', x: cx - def.w / 2, y: cy, props: { geo: 'rectangle', w: def.w, h: def.h, color: 'light-violet' } })
           } else {
             editor.createShape({ id: uid(), type: args === 'arrow' ? 'arrow' : 'line', x: cx - 50, y: cy })
           }
