@@ -46,7 +46,7 @@ function executePlan(editor, plan) {
     if (!def) {
       editor.createShape({
         id: createShapeId(), type: 'text', x, y,
-        props: { richText: [{ type: 'paragraph', content: [{ type: 'text', text: p.type || '?' }] }] },
+        props: { richText: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: p.type || '?' }] }] } },
       })
       drawn++
       continue
@@ -61,7 +61,7 @@ function executePlan(editor, plan) {
     if (def.label) {
       editor.createShape({
         id: createShapeId(), type: 'text', x: x + 8, y: y + 4,
-        props: { richText: [{ type: 'paragraph', content: [{ type: 'text', text: def.label }] }] },
+        props: { richText: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: def.label }] }] } },
       })
     }
 
@@ -126,7 +126,7 @@ function VoiceDrawInner() {
             if (color) props.color = color
             editor.createShape({ id: createShapeId(), type: 'geo', x: cx - 50, y: cy - 50, props })
           } else if (args && args.startsWith('label:')) {
-            editor.createShape({ id: createShapeId(), type: 'text', x: cx, y: cy, props: { richText: [{ type: 'paragraph', content: [{ type: 'text', text: args.replace('label:', '') }] }] } })
+            editor.createShape({ id: createShapeId(), type: 'text', x: cx, y: cy, props: { richText: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: args.replace('label:', '') }] }] } } })
           } else if (TYPE_MAP[args]) {
             const def = TYPE_MAP[args]
             editor.createShape({ id: createShapeId(), type: 'geo', x: cx - def.w / 2, y: cy, props: { geo: 'rectangle', w: def.w, h: def.h, color: 'light-violet' } })
