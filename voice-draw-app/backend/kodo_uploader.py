@@ -33,12 +33,15 @@ async def upload_json(key: str, data: dict) -> bool:
         return False
 
 
-async def download_json(key: str) -> dict | None:
+async def download_json(key: str, cache_bust: bool = False) -> dict | None:
     """从 Kodo 下载 JSON 对象"""
     if not QINIU_KODO_ACCESS_KEY:
         return None
     domain = await _get_domain()
     url = f"http://{domain}/{key}"
+    if cache_bust:
+        import time
+        url += f"?t={int(time.time())}"
     try:
         import requests
         r = await asyncio.to_thread(requests.get, url, timeout=10)
