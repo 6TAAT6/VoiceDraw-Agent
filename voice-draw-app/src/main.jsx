@@ -108,8 +108,8 @@ function VoiceDrawInner() {
       if (tldrawData) {
         try {
           const jsonStr = typeof tldrawData === 'string' ? tldrawData : JSON.stringify(tldrawData)
-          const result = parseTldrawJsonFile({ schema: editor.store.schema, jsonStr })
-          if (!result.error) {
+          const result = parseTldrawJsonFile({ schema: editor.store.schema, json: jsonStr })
+          if (result.ok) {
             editor.loadSnapshot(result.value.getStoreSnapshot())
             editor.clearHistory()
           }
