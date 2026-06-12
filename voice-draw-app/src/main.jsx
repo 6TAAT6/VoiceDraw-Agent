@@ -111,10 +111,20 @@ function VoiceDrawInner() {
 
       switch (cmd) {
         case 'create': {
+          const colorMap = { '红':'red','蓝':'blue','绿':'green','黄':'yellow','黑':'black','白':'white','紫':'purple','橙':'orange','灰':'gray' }
+          const extractColor = () => {
+            for (const [cn, ce] of Object.entries(colorMap)) {
+              if (result.raw && result.raw.includes(cn)) return ce
+            }
+            return null
+          }
           const geoMap = { circle: 'ellipse', rect: 'rectangle', triangle: 'triangle', diamond: 'diamond' }
           const geo = geoMap[args]
+          const color = extractColor()
           if (geo) {
-            editor.createShape({ id: createShapeId(), type: 'geo', x: cx - 50, y: cy - 50, props: { geo, w: 100, h: 100 } })
+            const props = { geo, w: 100, h: 100 }
+            if (color) props.color = color
+            editor.createShape({ id: createShapeId(), type: 'geo', x: cx - 50, y: cy - 50, props })
           } else if (args && args.startsWith('label:')) {
             editor.createShape({ id: createShapeId(), type: 'text', x: cx, y: cy, props: { richText: [{ type: 'paragraph', content: [{ type: 'text', text: args.replace('label:', '') }] }] } })
           } else if (TYPE_MAP[args]) {
