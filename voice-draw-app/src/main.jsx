@@ -172,6 +172,17 @@ function VoiceDrawInner() {
           break
         }
         case 'undo': editor.undo(); break
+        case 'save':
+          speak('正在保存').catch(() => {})
+          const saveData = Object.fromEntries(snapshot())
+          fetch('/api/snapshot/save', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(saveData),
+          }).then(r => r.json()).then(d => {
+            if (d.ok) speak('已保存').catch(() => {})
+            else speak('保存失败').catch(() => {})
+          }).catch(() => speak('保存失败').catch(() => {}))
+          break
         case 'redo': editor.redo(); break
         case 'clear':
           const ids = [...editor.getCurrentPageShapeIds()]
