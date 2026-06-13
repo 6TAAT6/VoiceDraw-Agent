@@ -4,7 +4,7 @@ from fastapi import APIRouter, UploadFile, File
 from pydantic import BaseModel
 from deepseek_planner import plan
 from asr_auth import recognize
-from kodo_uploader import upload_json, download_json, list_files
+from kodo_uploader import upload_json, download_json, list_files, upload_bytes, get_public_url
 
 router = APIRouter(prefix="/api")
 
@@ -69,6 +69,31 @@ async def snapshot_save(data: dict):
     ts_key = f"project_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
     ok = await upload_json(ts_key, data)
     return {"ok": ok, "key": ts_key if ok else None}
+
+
+class ExportRequest(BaseModel):
+    format: str  # "png" | "svg"
+    data: str    # base64 (PNG) 或 SVG 字符串
+
+
+@router.post("/export")
+async def export_image(req: ExportRequest):
+    """导出画布为 PNG/SVG 并上传 Kodo，返回外网 URL"""
+    from datetime import datetime
+    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    if req.format == "png":
+        raw = base64.b64decode(req.data)
+        key = f"export_{ts}.png"
+        ok = await upload_bytes(key, raw)
+    elif req.format == "svg":
+        raw = req.data.encode("utf-8")
+        key = f"export_{ts}.svg"
+        ok = await upload_bytes(key, raw)
+    else:
+        return {"ok": False, "error": f"不支持的格式: {req.format}"}
+    if not ok:
+        return {"ok": False, "error": "Kodo 上传失败"}
+    return {"ok": True, "url": await get_public_url(key)}
 
 
 @router.get("/snapshot/latest")

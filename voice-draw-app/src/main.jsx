@@ -236,6 +236,32 @@ function VoiceDrawInner() {
         case 'group': editor.groupShapes([...editor.getSelectedShapeIds()]); break
         case 'ungroup': editor.ungroupShapes([...editor.getSelectedShapeIds()]); break
         case 'selectAll': editor.selectAll(); break
+        case 'export': {
+          const raw = (result.raw || '').toLowerCase()
+          const fmt = raw.includes('svg') ? 'svg' : 'png'
+          speak(`正在导出${fmt.toUpperCase()}`).catch(() => {})
+          try {
+            let data
+            if (fmt === 'svg') {
+              const svgResult = await editor.getSvgString([])
+              if (!svgResult) { speak('导出失败：画布为空').catch(() => {}); break }
+              data = svgResult.svg
+            } else {
+              const imgResult = await editor.toImage([])
+              if (!imgResult) { speak('导出失败：画布为空').catch(() => {}); break }
+              const buf = await imgResult.blob.arrayBuffer()
+              data = btoa(String.fromCharCode(...new Uint8Array(buf)))
+            }
+            const r = await fetch('/api/export', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ format: fmt, data }),
+            })
+            const j = await r.json()
+            if (j.ok) speak(`已导出，链接已就绪：${j.url}`).catch(() => {})
+            else speak(`导出失败：${j.error || '未知错误'}`).catch(() => {})
+          } catch (e) { speak('导出失败').catch(() => {}) }
+          break
+        }
         case 'template':
           speak('收到，正在绘制').catch(() => {})
           const tmpl = loadScene(args)

@@ -70,6 +70,28 @@ async def list_files(prefix: str = "project_", limit: int = 20) -> list[str]:
         return []
 
 
+async def upload_bytes(key: str, data: bytes) -> bool:
+    """上传原始字节到 Kodo"""
+    if not QINIU_KODO_ACCESS_KEY:
+        return False
+    token = _get_auth().upload_token(QINIU_KODO_BUCKET, key, 3600)
+    try:
+        ret, info = await asyncio.to_thread(put_data, token, key, data)
+        if info.status_code != 200:
+            print(f"[Kodo] 上传失败: key={key}, code={info.status_code}")
+            return False
+        return True
+    except Exception as e:
+        print(f"[Kodo] 上传异常: {e}")
+        return False
+
+
+async def get_public_url(key: str) -> str:
+    """获取 Kodo 文件的外网访问 URL"""
+    domain = await _get_domain()
+    return f"http://{domain}/{key}"
+
+
 async def delete_file(key: str) -> bool:
     """删除 Kodo 文件"""
     if not QINIU_KODO_ACCESS_KEY:
