@@ -262,6 +262,7 @@ function VoiceDrawInner() {
     }
     isListening.current = true
     document.getElementById('mic-btn')?.classList.add('listening'); toListening()
+    const stEl = document.getElementById('status-text'); if (stEl) stEl.textContent = '🎤 正在录音…'
     startListening({
       onInterim: (t) => { const el = document.getElementById('status-text'); if (el) el.textContent = t || '正在听...' },
       onResult: async (text) => {
@@ -269,7 +270,13 @@ function VoiceDrawInner() {
         document.getElementById('mic-btn')?.classList.remove('listening')
         for (const c of splitCommands(text)) await executeCommand(await route(c))
       },
-      onError: () => { updateStatusUI('error'); isListening.current = false; document.getElementById('mic-btn')?.classList.remove('listening'); setTimeout(() => toIdle(), 2000) },
+      onError: (err) => {
+        const msg = err?.message || '语音识别失败'
+        updateStatusUI('error', { message: msg })
+        isListening.current = false
+        document.getElementById('mic-btn')?.classList.remove('listening')
+        setTimeout(() => toIdle(), 3000)
+      },
     })
   }, [executeCommand])
 
