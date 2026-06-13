@@ -183,18 +183,24 @@ function VoiceDrawInner() {
           }
           const geo = geoMap[args]
           const color = extractColor()
+          let createdId = null
           if (geo) {
             const props = { geo, w: 100, h: 100 }
             if (color) props.color = color
-            editor.createShape({ id: createShapeId(), type: 'geo', x: cx - 50, y: cy - 50, props })
+            createdId = createShapeId()
+            editor.createShape({ id: createdId, type: 'geo', x: cx - 50, y: cy - 50, props })
           } else if (args && args.startsWith('label:')) {
-            editor.createShape({ id: createShapeId(), type: 'text', x: cx, y: cy, props: { richText: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: args.replace('label:', '') }] }] } } })
+            createdId = createShapeId()
+            editor.createShape({ id: createdId, type: 'text', x: cx, y: cy, props: { richText: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: args.replace('label:', '') }] }] } } })
           } else if (TYPE_MAP[args]) {
             const def = TYPE_MAP[args]
-            editor.createShape({ id: createShapeId(), type: 'geo', x: cx - def.w / 2, y: cy, props: { geo: 'rectangle', w: def.w, h: def.h, color: 'light-violet' } })
+            createdId = createShapeId()
+            editor.createShape({ id: createdId, type: 'geo', x: cx - def.w / 2, y: cy, props: { geo: 'rectangle', w: def.w, h: def.h, color: 'light-violet' } })
           } else {
-            editor.createShape({ id: createShapeId(), type: args === 'arrow' ? 'arrow' : 'line', x: cx - 50, y: cy })
+            createdId = createShapeId()
+            editor.createShape({ id: createdId, type: args === 'arrow' ? 'arrow' : 'line', x: cx - 50, y: cy })
           }
+          if (createdId) editor.select(createdId)
           break
         }
         case 'color':
@@ -257,9 +263,9 @@ function VoiceDrawInner() {
               body: JSON.stringify({ format: fmt, data }),
             })
             const j = await r.json()
-            if (j.ok) speak(`已导出，链接已就绪：${j.url}`).catch(() => {})
+            if (j.ok) speak(`导出成功：${j.url}`).catch(() => {})
             else speak(`导出失败：${j.error || '未知错误'}`).catch(() => {})
-          } catch (e) { speak('导出失败').catch(() => {}) }
+          } catch (e) { speak(`导出失败：${e?.message || e}`).catch(() => {}) }
           break
         }
         case 'template':
