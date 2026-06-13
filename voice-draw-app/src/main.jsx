@@ -95,6 +95,8 @@ function VoiceDrawInner() {
   const isListening = useRef(false)
   // 缓存最近一次快照数据，供 beforeunload 同步发送
   const lastSaveRef = useRef(null)
+  // 防止 React StrictMode 双重执行 + HMR 重复恢复
+  const restoredRef = useRef(false)
 
   useEffect(() => {
     window.__editor = editor
@@ -119,7 +121,9 @@ function VoiceDrawInner() {
   }, [])
 
   useEffect(() => {
-    // 启动时恢复最近快照（仅执行一次）
+    // 启动时恢复最近快照（仅执行一次，防止 StrictMode 双调用）
+    if (restoredRef.current) return
+    restoredRef.current = true
     fetch('/api/snapshot/latest').then(r => r.json()).then(async d => {
       const payload = d?.data
       if (!payload) return
@@ -129,8 +133,10 @@ function VoiceDrawInner() {
           const jsonStr = typeof tldrawData === 'string' ? tldrawData : JSON.stringify(tldrawData)
           const result = parseTldrawJsonFile({ schema: editor.store.schema, json: jsonStr })
           if (result.ok) {
-            editor.loadSnapshot(result.value.getStoreSnapshot())
-            editor.clearHistory()
+            editor.run(() => {
+              editor.loadSnapshot(result.value.getStoreSnapshot())
+              editor.clearHistory()
+            }, { history: 'ignore' })
           }
         } catch (e) { console.warn('Snapshot restore failed:', e) }
       }
