@@ -106,8 +106,13 @@ const L8_MAP = [
   { keys: ['ER图', '数据库'], template: 'er-diagram' },
   { keys: ['卡片', 'card'], fallback: 'create:card-grid' },
   { keys: ['表格', 'table'], fallback: 'create:table' },
-  { keys: ['侧边栏', '导航'], fallback: 'create:sidebar' },
+  { keys: ['侧边栏', '左侧导航'], fallback: 'create:sidebar' },
+  { keys: ['导航栏', '顶部栏', '顶部导航'], fallback: 'create:navbar' },
   { keys: ['搜索', 'search'], fallback: 'create:search-bar' },
+  { keys: ['按钮'], fallback: 'create:button' },
+  { keys: ['表单'], fallback: 'create:form' },
+  { keys: ['输入框'], fallback: 'create:input' },
+  { keys: ['页脚'], fallback: 'create:footer' },
 ]
 
 export function matchL8(text) {
