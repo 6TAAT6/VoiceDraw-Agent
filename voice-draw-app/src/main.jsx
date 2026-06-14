@@ -135,8 +135,8 @@ function VoiceDrawInner() {
           if (result.ok) {
             editor.run(() => {
               editor.loadSnapshot(result.value.getStoreSnapshot())
-              editor.clearHistory()
             }, { history: 'ignore' })
+            editor.clearHistory()
           }
         } catch (e) { console.warn('Snapshot restore failed:', e) }
       }
@@ -165,6 +165,12 @@ function VoiceDrawInner() {
     if (!result || result.cmd === 'noop' || result.cmd === 'unknown') return
     toDrawing()
     const { cmd, args } = result
+
+    // 为画布修改类命令创建 undo 边界（undo/redo/save/export/selectAll 不修改画布）
+    if (!['undo', 'redo', 'save', 'export', 'selectAll'].includes(cmd)) {
+      editor.markHistoryStoppingPoint(cmd)
+    }
+
     try {
       const selected = editor.getSelectedShapes()
       const vp = editor.getViewportPageBounds()

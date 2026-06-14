@@ -14,6 +14,9 @@ if ENV_FILE.exists():
 
 DEEPSEEK_API_KEY = os.getenv("QINIU_DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.getenv("QINIU_DEEPSEEK_BASE_URL", "https://api.qiniu.com/v1")
+XUNFEI_APP_ID = os.getenv("XUNFEI_APP_ID", "")
+XUNFEI_API_KEY = os.getenv("XUNFEI_API_KEY", "")
+XUNFEI_API_SECRET = os.getenv("XUNFEI_API_SECRET", "")
 QINIU_ASR_ACCESS_KEY = os.getenv("QINIU_ASR_ACCESS_KEY", "")
 QINIU_ASR_SECRET_KEY = os.getenv("QINIU_ASR_SECRET_KEY", "")
 QINIU_KODO_ACCESS_KEY = os.getenv("QINIU_KODO_ACCESS_KEY", "")

@@ -3,7 +3,7 @@ import base64
 from fastapi import APIRouter, UploadFile, File
 from pydantic import BaseModel
 from deepseek_planner import plan
-from asr_auth import recognize
+from asr import recognize as asr_recognize
 from kodo_uploader import upload_json, download_json, list_files, upload_bytes, get_public_url
 
 router = APIRouter(prefix="/api")
@@ -44,19 +44,18 @@ async def health():
 
 @router.get("/asr/token")
 async def asr_token():
-    """检测 ASR 是否可用"""
-    from config import QINIU_ASR_ACCESS_KEY
-    if QINIU_ASR_ACCESS_KEY:
+    """检测 ASR 是否可用（讯飞）"""
+    from config import XUNFEI_APP_ID, XUNFEI_API_KEY
+    if XUNFEI_APP_ID and XUNFEI_API_KEY:
         return {"available": True}
-    return {"available": False, "reason": "ASR 密钥未配置"}
+    return {"available": False, "reason": "讯飞 ASR 密钥未配置"}
 
 
 @router.post("/asr/recognize")
-async def asr_recognize(audio: UploadFile = File(...)):
-    """接收前端录音，base64 直传七牛短语音听写"""
+async def asr_recognize_route(audio: UploadFile = File(...)):
+    """接收前端录音 WebM，通过讯飞实时语音转写识别"""
     audio_bytes = await audio.read()
-    b64 = base64.b64encode(audio_bytes).decode()
-    text = await recognize(b64)
+    text = await asr_recognize(audio_bytes)
     if text:
         return {"text": text}
     return {"text": "", "error": "未识别到语音"}
